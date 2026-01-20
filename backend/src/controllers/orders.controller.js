@@ -26,6 +26,15 @@ const resolvePaymentStatusExpression = (columns, alias = "o") => {
   return "'unpaid'";
 };
 
+const buildOrderNumber = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const rand = Math.floor(Math.random() * 9000) + 1000;
+  return `ORD-${yyyy}${mm}${dd}-${rand}`;
+};
+
 const createOrder = asyncHandler(async (req, res) => {
   const { customer_id, items } = req.body;
 
@@ -93,6 +102,12 @@ const createOrder = asyncHandler(async (req, res) => {
     if (orderColumns.has("status")) {
       insertColumns.push("status");
       insertValues.push("pending");
+      valuePlaceholders.push(`$${idx}`);
+      idx += 1;
+    }
+    if (orderColumns.has("order_number")) {
+      insertColumns.push("order_number");
+      insertValues.push(buildOrderNumber());
       valuePlaceholders.push(`$${idx}`);
       idx += 1;
     }

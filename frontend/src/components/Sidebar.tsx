@@ -14,6 +14,8 @@ interface SidebarProps {
   currentScreen: string;
   onNavigate: (screen: string) => void;
   onLogout: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const menuItems = [
@@ -24,16 +26,24 @@ const menuItems = [
   { id: 'inventory', label: 'Inventory', icon: Warehouse },
 ];
 
-export default function Sidebar({ currentScreen, onNavigate, onLogout }: SidebarProps) {
+export default function Sidebar({
+  currentScreen,
+  onNavigate,
+  onLogout,
+  isOpen,
+  onClose,
+}: SidebarProps) {
   return (
     <motion.aside 
       initial={{ x: -100, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="w-64 bg-[#040303] flex flex-col"
+      className={`w-64 bg-[#040303] flex flex-col fixed lg:static inset-y-0 left-0 z-40 transform transition-transform duration-300 ${
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      } lg:translate-x-0`}
     >
       {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
+      <div className="p-6 border-b border-gray-800 flex items-center justify-between">
         <motion.div 
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -52,6 +62,14 @@ export default function Sidebar({ currentScreen, onNavigate, onLogout }: Sidebar
             <p className="text-xs text-gray-400">Enterprise Edition</p>
           </div>
         </motion.div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="lg:hidden text-gray-400 hover:text-white"
+          aria-label="Close menu"
+        >
+          ✕
+        </button>
       </div>
 
       {/* Navigation */}

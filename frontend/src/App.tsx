@@ -22,6 +22,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(Boolean(getToken()));
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isLoggedIn) {
     if (authMode === 'register') {
@@ -48,7 +49,10 @@ export default function App() {
     <div className="flex h-screen bg-[#F8F9FB]">
       <Sidebar
         currentScreen={currentScreen}
-        onNavigate={setCurrentScreen}
+        onNavigate={(screen) => {
+          setCurrentScreen(screen);
+          setSidebarOpen(false);
+        }}
         onLogout={() => {
           clearToken();
           localStorage.removeItem('erp_user');
@@ -56,9 +60,19 @@ export default function App() {
           setIsLoggedIn(false);
           setAuthMode('login');
         }}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
+      {sidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          aria-label="Close menu"
+        />
+      )}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header user={user} />
+        <Header user={user} onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto">
           {currentScreen === 'dashboard' && <Dashboard />}
           {currentScreen === 'customers' && <CustomersList />}

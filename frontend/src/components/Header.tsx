@@ -1,11 +1,12 @@
-import { Search, Bell, User } from 'lucide-react';
+import { Menu, Search, Bell, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 type HeaderProps = {
   user: { full_name: string; role: string } | null;
+  onMenuClick: () => void;
 };
 
-export default function Header({ user }: HeaderProps) {
+export default function Header({ user, onMenuClick }: HeaderProps) {
   const displayName = user?.full_name || 'User';
   const displayRole = user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : 'Staff';
   return (
@@ -21,8 +22,16 @@ export default function Header({ user }: HeaderProps) {
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1 max-w-xl"
+          className="flex-1 max-w-xl flex items-center gap-3"
         >
+          <button
+            type="button"
+            onClick={onMenuClick}
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5 text-gray-600" />
+          </button>
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input

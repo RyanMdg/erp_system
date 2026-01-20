@@ -24,6 +24,7 @@ export default function OrderCreation() {
   const [orders, setOrders] = useState<
     Array<{
       id: string;
+      order_number?: string | null;
       customer_name: string;
       total: number;
       status: string;
@@ -370,7 +371,7 @@ export default function OrderCreation() {
                     {orders.map((order) => (
                       <tr key={order.id}>
                         <td className="py-2 font-medium text-[#040303]">
-                          ORD-{order.id}
+                          {order.order_number || `ORD-${order.id}`}
                         </td>
                         <td className="py-2">{order.customer_name}</td>
                         <td className="py-2">${Number(order.total).toFixed(2)}</td>

@@ -26,6 +26,19 @@ const resolvePaymentStatusExpression = (columns, alias = "o") => {
   return "'unpaid'";
 };
 
+const resolveOrderNumberExpression = (columns, alias = "o") => {
+  const prefix = alias ? `${alias}.` : "";
+  if (columns.has("order_number")) return `${prefix}order_number`;
+  return "NULL";
+};
+
+const resolveOrderItemTotalExpression = (columns, alias = "oi") => {
+  const prefix = alias ? `${alias}.` : "";
+  if (columns.has("total_price")) return `${prefix}total_price`;
+  if (columns.has("line_total")) return `${prefix}line_total`;
+  return "NULL";
+};
+
 const buildOrderNumber = () => {
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -117,6 +130,18 @@ const createOrder = asyncHandler(async (req, res) => {
       valuePlaceholders.push(`$${idx}`);
       idx += 1;
     }
+    if (orderColumns.has("order_number")) {
+      insertColumns.push("order_number");
+      insertValues.push(buildOrderNumber());
+      valuePlaceholders.push(`$${idx}`);
+      idx += 1;
+    }
+    if (orderColumns.has("created_by")) {
+      insertColumns.push("created_by");
+      insertValues.push(req.user.id);
+      valuePlaceholders.push(`$${idx}`);
+      idx += 1;
+    }
     if (orderColumns.has("subtotal")) {
       insertColumns.push("subtotal");
       insertValues.push(subtotal);
@@ -164,10 +189,12 @@ const createOrder = asyncHandler(async (req, res) => {
 
     const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
     const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
+    const orderNumberExpr = resolveOrderNumberExpression(orderColumns, "");
     const orderResult = await client.query(
       `INSERT INTO orders (${insertColumns.join(", ")})
        VALUES (${valuePlaceholders.join(", ")})
-       RETURNING id, customer_id, status, subtotal, tax, ${orderTotalExpr} AS total, ${paymentStatusExpr} AS payment_status, created_at`,
+       RETURNING id, ${orderNumberExpr} AS order_number, customer_id, status, subtotal, tax,
+                 ${orderTotalExpr} AS total, ${paymentStatusExpr} AS payment_status, created_at`,
       insertValues
     );
 
@@ -270,12 +297,13 @@ const listOrders = asyncHandler(async (req, res) => {
   );
 
   const orderColumns = await getColumns("orders");
-  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
-  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
+  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
+  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+  const orderNumberExpr = resolveOrderNumberExpression(orderColumns, "o");
 
   const listResult = await query(
-    `SELECT o.id, o.customer_id, o.status, ${orderTotalExpr} AS total,
-            ${paymentStatusExpr} AS payment_status, o.created_at,
+    `SELECT o.id, ${orderNumberExpr} AS order_number, o.customer_id, o.status,
+            ${orderTotalExpr} AS total, ${paymentStatusExpr} AS payment_status, o.created_at,
             c.name AS customer_name, c.contact_email AS customer_email
      FROM orders o
      JOIN customers c ON c.id = o.customer_id
@@ -294,11 +322,12 @@ const getOrder = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const orderColumns = await getColumns("orders");
-  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
-  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
+  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
+  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+  const orderNumberExpr = resolveOrderNumberExpression(orderColumns, "o");
   const orderResult = await query(
-    `SELECT o.id, o.customer_id, o.status, o.subtotal, o.tax, ${orderTotalExpr} AS total,
-            ${paymentStatusExpr} AS payment_status, o.created_at,
+    `SELECT o.id, ${orderNumberExpr} AS order_number, o.customer_id, o.status, o.subtotal, o.tax,
+            ${orderTotalExpr} AS total, ${paymentStatusExpr} AS payment_status, o.created_at,
             c.name AS customer_name, c.contact_email AS customer_email
      FROM orders o
      JOIN customers c ON c.id = o.customer_id
@@ -310,8 +339,10 @@ const getOrder = asyncHandler(async (req, res) => {
     return sendError(res, 404, "Order not found");
   }
 
+  const orderItemsColumns = await getColumns("order_items");
+  const lineTotalExpr = resolveOrderItemTotalExpression(orderItemsColumns, "oi");
   const itemsResult = await query(
-    `SELECT oi.product_id, oi.quantity, oi.unit_price, oi.total_price,
+    `SELECT oi.product_id, oi.quantity, oi.unit_price, ${lineTotalExpr} AS total_price,
             p.name AS product_name, p.sku
      FROM order_items oi
      JOIN products p ON p.id = oi.product_id
@@ -332,12 +363,13 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   const orderColumns = await getColumns("orders");
   const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
   const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
+  const orderNumberExpr = resolveOrderNumberExpression(orderColumns, "");
   const result = await query(
     `UPDATE orders
      SET status = $1
      WHERE id = $2
-     RETURNING id, customer_id, status, subtotal, tax, ${orderTotalExpr} AS total,
-               ${paymentStatusExpr} AS payment_status, created_at`,
+     RETURNING id, ${orderNumberExpr} AS order_number, customer_id, status, subtotal, tax,
+               ${orderTotalExpr} AS total, ${paymentStatusExpr} AS payment_status, created_at`,
     [status, id]
   );
 
@@ -362,13 +394,14 @@ const updatePaymentStatus = asyncHandler(async (req, res) => {
     : "payment_state";
   const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
   const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
+  const orderNumberExpr = resolveOrderNumberExpression(orderColumns, "");
 
   const result = await query(
     `UPDATE orders
      SET ${paymentColumn} = $1
      WHERE id = $2
-     RETURNING id, customer_id, status, subtotal, tax, ${orderTotalExpr} AS total,
-               ${paymentStatusExpr} AS payment_status, created_at`,
+     RETURNING id, ${orderNumberExpr} AS order_number, customer_id, status, subtotal, tax,
+               ${orderTotalExpr} AS total, ${paymentStatusExpr} AS payment_status, created_at`,
     [payment_status, id]
   );
 

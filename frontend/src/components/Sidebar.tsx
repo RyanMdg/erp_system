@@ -5,13 +5,15 @@ import {
   ShoppingCart, 
   Warehouse,
   Settings,
-  HelpCircle
+  HelpCircle,
+  LogOut
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
   currentScreen: string;
   onNavigate: (screen: string) => void;
+  onLogout: () => void;
 }
 
 const menuItems = [
@@ -22,7 +24,7 @@ const menuItems = [
   { id: 'inventory', label: 'Inventory', icon: Warehouse },
 ];
 
-export default function Sidebar({ currentScreen, onNavigate }: SidebarProps) {
+export default function Sidebar({ currentScreen, onNavigate, onLogout }: SidebarProps) {
   return (
     <motion.aside 
       initial={{ x: -100, opacity: 0 }}
@@ -102,6 +104,15 @@ export default function Sidebar({ currentScreen, onNavigate }: SidebarProps) {
         >
           <HelpCircle className="w-5 h-5" />
           <span className="font-medium">Help</span>
+        </motion.button>
+        <motion.button 
+          whileHover={{ scale: 1.05, x: 5 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition-all duration-300"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="font-medium">Logout</span>
         </motion.button>
       </div>
     </motion.aside>

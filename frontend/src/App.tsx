@@ -8,7 +8,7 @@ import OrderCreation from './components/OrderCreation';
 import InventoryMovements from './components/InventoryMovements';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import { getToken } from './api/client';
+import { clearToken, getToken } from './api/client';
 
 export default function App() {
   const initialUser = useMemo(() => {
@@ -46,7 +46,17 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#F8F9FB]">
-      <Sidebar currentScreen={currentScreen} onNavigate={setCurrentScreen} />
+      <Sidebar
+        currentScreen={currentScreen}
+        onNavigate={setCurrentScreen}
+        onLogout={() => {
+          clearToken();
+          localStorage.removeItem('erp_user');
+          setUser(null);
+          setIsLoggedIn(false);
+          setAuthMode('login');
+        }}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} />
         <main className="flex-1 overflow-y-auto">

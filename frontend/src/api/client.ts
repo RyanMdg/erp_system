@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://erp-system-myx2.onrender.com/api";
 
 type ApiError = {
   message?: string;

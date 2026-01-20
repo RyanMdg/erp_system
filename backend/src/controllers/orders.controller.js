@@ -130,18 +130,6 @@ const createOrder = asyncHandler(async (req, res) => {
       valuePlaceholders.push(`$${idx}`);
       idx += 1;
     }
-    if (orderColumns.has("order_number")) {
-      insertColumns.push("order_number");
-      insertValues.push(buildOrderNumber());
-      valuePlaceholders.push(`$${idx}`);
-      idx += 1;
-    }
-    if (orderColumns.has("created_by")) {
-      insertColumns.push("created_by");
-      insertValues.push(req.user.id);
-      valuePlaceholders.push(`$${idx}`);
-      idx += 1;
-    }
     if (orderColumns.has("subtotal")) {
       insertColumns.push("subtotal");
       insertValues.push(subtotal);

@@ -7,20 +7,22 @@ const { getColumns } = require("../utils/schema");
 const TAX_RATE = parseFloat(process.env.TAX_RATE || "0");
 
 const resolveOrderTotalExpression = (columns, alias = "o") => {
-  if (columns.has("total")) return `${alias}.total`;
-  if (columns.has("total_amount")) return `${alias}.total_amount`;
-  if (columns.has("grand_total")) return `${alias}.grand_total`;
-  if (columns.has("amount")) return `${alias}.amount`;
+  const prefix = alias ? `${alias}.` : "";
+  if (columns.has("total")) return `${prefix}total`;
+  if (columns.has("total_amount")) return `${prefix}total_amount`;
+  if (columns.has("grand_total")) return `${prefix}grand_total`;
+  if (columns.has("amount")) return `${prefix}amount`;
   if (columns.has("subtotal") && columns.has("tax")) {
-    return `${alias}.subtotal + ${alias}.tax`;
+    return `${prefix}subtotal + ${prefix}tax`;
   }
-  if (columns.has("subtotal")) return `${alias}.subtotal`;
+  if (columns.has("subtotal")) return `${prefix}subtotal`;
   return "0";
 };
 
 const resolvePaymentStatusExpression = (columns, alias = "o") => {
-  if (columns.has("payment_status")) return `${alias}.payment_status`;
-  if (columns.has("payment_state")) return `${alias}.payment_state`;
+  const prefix = alias ? `${alias}.` : "";
+  if (columns.has("payment_status")) return `${prefix}payment_status`;
+  if (columns.has("payment_state")) return `${prefix}payment_state`;
   return "'unpaid'";
 };
 
@@ -139,8 +141,8 @@ const createOrder = asyncHandler(async (req, res) => {
       idx += 1;
     }
 
-    const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
-    const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+    const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
+    const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
     const orderResult = await client.query(
       `INSERT INTO orders (${insertColumns.join(", ")})
        VALUES (${valuePlaceholders.join(", ")})
@@ -216,8 +218,8 @@ const listOrders = asyncHandler(async (req, res) => {
   );
 
   const orderColumns = await getColumns("orders");
-  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
-  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
+  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
 
   const listResult = await query(
     `SELECT o.id, o.customer_id, o.status, ${orderTotalExpr} AS total,
@@ -240,8 +242,8 @@ const getOrder = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const orderColumns = await getColumns("orders");
-  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
-  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
+  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
   const orderResult = await query(
     `SELECT o.id, o.customer_id, o.status, o.subtotal, o.tax, ${orderTotalExpr} AS total,
             ${paymentStatusExpr} AS payment_status, o.created_at,
@@ -276,8 +278,8 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
 
   const orderColumns = await getColumns("orders");
-  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
-  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
+  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
   const result = await query(
     `UPDATE orders
      SET status = $1
@@ -306,8 +308,8 @@ const updatePaymentStatus = asyncHandler(async (req, res) => {
   const paymentColumn = orderColumns.has("payment_status")
     ? "payment_status"
     : "payment_state";
-  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "o");
-  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "o");
+  const orderTotalExpr = resolveOrderTotalExpression(orderColumns, "");
+  const paymentStatusExpr = resolvePaymentStatusExpression(orderColumns, "");
 
   const result = await query(
     `UPDATE orders

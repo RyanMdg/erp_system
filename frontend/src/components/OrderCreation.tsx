@@ -1,0 +1,342 @@
+import { useEffect, useState } from 'react';
+import { Search, Plus, Trash2, ShoppingCart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { apiFetch } from '../api/client';
+
+interface OrderItem {
+  productId: number;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+export default function OrderCreation() {
+  const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [customers, setCustomers] = useState<Array<{ id: number; name: string }>>([]);
+  const [availableProducts, setAvailableProducts] = useState<
+    Array<{ id: number; name: string; price: number; stock_quantity: number }>
+  >([]);
+
+  useEffect(() => {
+    apiFetch<{ items: Array<{ id: number; name: string }> }>(
+      '/customers?page=1&pageSize=100'
+    )
+      .then((data) => setCustomers(data.items))
+      .catch(() => {});
+
+    apiFetch<{ items: Array<{ id: number; name: string; price: number; stock_quantity: number }> }>(
+      '/products?page=1&pageSize=100'
+    )
+      .then((data) => setAvailableProducts(data.items))
+      .catch(() => {});
+  }, []);
+
+  const addProduct = () => {
+    if (!selectedProduct) return;
+    
+    const product = availableProducts.find(p => p.id === parseInt(selectedProduct));
+    if (!product) return;
+
+    const existingItem = orderItems.find(item => item.productId === product.id);
+    if (existingItem) {
+      setOrderItems(orderItems.map(item =>
+        item.productId === product.id
+          ? { ...item, quantity: item.quantity + quantity }
+          : item
+      ));
+    } else {
+      setOrderItems([...orderItems, {
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: quantity
+      }]);
+    }
+    
+    setSelectedProduct('');
+    setQuantity(1);
+  };
+
+  const removeProduct = (productId: number) => {
+    setOrderItems(orderItems.filter(item => item.productId !== productId));
+  };
+
+  const updateQuantity = (productId: number, newQuantity: number) => {
+    if (newQuantity < 1) return;
+    setOrderItems(orderItems.map(item =>
+      item.productId === productId
+        ? { ...item, quantity: newQuantity }
+        : item
+    ));
+  };
+
+  const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const tax = subtotal * 0.1; // 10% tax
+  const total = subtotal + tax;
+
+  const createOrder = async () => {
+    if (!selectedCustomer || orderItems.length === 0) return;
+    try {
+      await apiFetch('/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          customer_id: Number(selectedCustomer),
+          items: orderItems.map((item) => ({
+            product_id: item.productId,
+            quantity: item.quantity,
+            unit_price: item.price
+          }))
+        })
+      });
+      alert('Order created');
+      setOrderItems([]);
+      setSelectedCustomer('');
+      setSelectedProduct('');
+      setQuantity(1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to create order');
+    }
+  };
+
+  return (
+    <div className="p-8 space-y-6">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h1 className="text-2xl font-semibold text-[#040303]">Create New Order</h1>
+        <p className="text-gray-500 mt-1">Add products and create an order for a customer</p>
+      </motion.div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Order Form */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Customer Selection */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="bg-white rounded-2xl p-6 shadow-sm"
+          >
+            <h2 className="font-semibold text-[#040303] mb-4">Customer Information</h2>
+            <div>
+              <label className="block text-sm font-medium text-[#040303] mb-2">
+                Select Customer
+              </label>
+              <select
+                value={selectedCustomer}
+                onChange={(e) => setSelectedCustomer(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300 focus:scale-105"
+              >
+                <option value="">Choose a customer...</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </motion.div>
+
+          {/* Add Products */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="bg-white rounded-2xl p-6 shadow-sm"
+          >
+            <h2 className="font-semibold text-[#040303] mb-4">Add Products</h2>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Select Product
+                </label>
+                <select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                >
+                  <option value="">Choose a product...</option>
+                  {availableProducts.map(product => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} - ${product.price} (Stock: {product.stock_quantity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-32">
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                />
+              </div>
+              <div className="flex items-end">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={addProduct}
+                  className="px-5 py-3 bg-[#040303] text-white rounded-xl hover:bg-gray-800 hover:shadow-lg transition-all duration-300 flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Order Items */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="bg-white rounded-2xl p-6 shadow-sm"
+          >
+            <h2 className="font-semibold text-[#040303] mb-4">Order Items</h2>
+            <AnimatePresence mode="popLayout">
+              {orderItems.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="text-center py-12"
+                >
+                  <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No items added yet</p>
+                </motion.div>
+              ) : (
+                <div className="space-y-3">
+                  {orderItems.map((item, index) => (
+                    <motion.div
+                      key={item.productId}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      whileHover={{ scale: 1.02 }}
+                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-[#040303]">{item.name}</p>
+                        <p className="text-sm text-gray-500">${item.price.toFixed(2)} each</p>
+                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.productId, parseInt(e.target.value) || 1)}
+                        className="w-20 px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#040303] transition-all duration-300"
+                      />
+                      <p className="w-24 text-right font-semibold text-[#040303]">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </p>
+                      <motion.button
+                        whileHover={{ scale: 1.2, rotate: 10 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => removeProduct(item.productId)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </motion.button>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+
+        {/* Order Summary */}
+        <div className="lg:col-span-1">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="bg-white rounded-2xl p-6 shadow-sm sticky top-8"
+          >
+            <h2 className="font-semibold text-[#040303] mb-4">Order Summary</h2>
+            
+            <motion.div 
+              className="space-y-3 mb-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal</span>
+                <motion.span
+                  key={subtotal}
+                  initial={{ scale: 1.2, color: '#040303' }}
+                  animate={{ scale: 1, color: '#6b7280' }}
+                  className="font-medium"
+                >
+                  ${subtotal.toFixed(2)}
+                </motion.span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Tax (10%)</span>
+                <span className="font-medium">${tax.toFixed(2)}</span>
+              </div>
+              <div className="pt-3 border-t border-gray-200">
+                <div className="flex justify-between">
+                  <span className="font-semibold text-[#040303]">Total</span>
+                  <motion.span
+                    key={total}
+                    initial={{ scale: 1.2 }}
+                    animate={{ scale: 1 }}
+                    className="font-semibold text-[#040303] text-xl"
+                  >
+                    ${total.toFixed(2)}
+                  </motion.span>
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="space-y-3">
+              <motion.button
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                disabled={orderItems.length === 0 || !selectedCustomer}
+                onClick={createOrder}
+                className="w-full py-3 bg-[#040303] text-white rounded-xl hover:bg-gray-800 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                Create Order
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors duration-200 font-medium"
+              >
+                Save as Draft
+              </motion.button>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-6 p-4 bg-gray-50 rounded-xl"
+            >
+              <h3 className="text-sm font-semibold text-[#040303] mb-2">Order Details</h3>
+              <div className="space-y-1 text-sm text-gray-700">
+                <p>Items: {orderItems.length}</p>
+                <p>Total Units: {orderItems.reduce((sum, item) => sum + item.quantity, 0)}</p>
+                <p>Customer: {selectedCustomer ? customers.find(c => c.id === parseInt(selectedCustomer))?.name : 'Not selected'}</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+}

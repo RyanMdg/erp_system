@@ -1,5 +1,5 @@
 const express = require("express");
-const { body, param, query } = require("express-validator");
+const { body, param, query, oneOf } = require("express-validator");
 const {
   createOrder,
   listOrders,
@@ -16,9 +16,12 @@ router.use(authenticate);
 router.post(
   "/",
   [
-    body("customer_id").isInt(),
+    oneOf([body("customer_id").isUUID(), body("customer_id").isInt()], "Invalid customer id"),
     body("items").isArray({ min: 1 }),
-    body("items.*.product_id").isInt(),
+    oneOf(
+      [body("items.*.product_id").isUUID(), body("items.*.product_id").isInt()],
+      "Invalid product id"
+    ),
     body("items.*.quantity").isInt({ min: 1 }),
     body("items.*.unit_price").optional().isFloat({ min: 0 }),
     validate,
@@ -38,14 +41,14 @@ router.get(
 
 router.get(
   "/:id",
-  [param("id").isInt(), validate],
+  [oneOf([param("id").isUUID(), param("id").isInt()], "Invalid order id"), validate],
   getOrder
 );
 
 router.patch(
   "/:id/status",
   [
-    param("id").isInt(),
+    oneOf([param("id").isUUID(), param("id").isInt()], "Invalid order id"),
     body("status").isIn(["pending", "processing", "completed", "cancelled"]),
     validate,
   ],

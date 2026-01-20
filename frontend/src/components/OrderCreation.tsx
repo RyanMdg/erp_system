@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../api/client';
 
 interface OrderItem {
-  productId: number;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
@@ -15,41 +15,58 @@ export default function OrderCreation() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [customers, setCustomers] = useState<Array<{ id: number; name: string }>>([]);
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string }>>([]);
   const [availableProducts, setAvailableProducts] = useState<
-    Array<{ id: number; name: string; price: number; stock_quantity: number }>
+    Array<{ id: string; name: string; price: number; stock_quantity: number }>
   >([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const loadOptions = () => {
+    setLoading(true);
+    setErrorMessage('');
+    Promise.all([
+      apiFetch<{ items: Array<{ id: string; name: string }> }>(
+        '/customers?page=1&pageSize=100'
+      ),
+      apiFetch<{
+        items: Array<{ id: string; name: string; price: number; stock_quantity: number }>;
+      }>('/products?page=1&pageSize=100'),
+    ])
+      .then(([customersResult, productsResult]) => {
+        setCustomers(customersResult.items);
+        setAvailableProducts(productsResult.items);
+      })
+      .catch((error) => {
+        setErrorMessage(
+          error instanceof Error ? error.message : 'Failed to load order data'
+        );
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
 
   useEffect(() => {
-    apiFetch<{ items: Array<{ id: number; name: string }> }>(
-      '/customers?page=1&pageSize=100'
-    )
-      .then((data) => setCustomers(data.items))
-      .catch(() => {});
-
-    apiFetch<{ items: Array<{ id: number; name: string; price: number; stock_quantity: number }> }>(
-      '/products?page=1&pageSize=100'
-    )
-      .then((data) => setAvailableProducts(data.items))
-      .catch(() => {});
+    loadOptions();
   }, []);
 
   const addProduct = () => {
     if (!selectedProduct) return;
     
-    const product = availableProducts.find(p => p.id === parseInt(selectedProduct));
+    const product = availableProducts.find(p => String(p.id) === String(selectedProduct));
     if (!product) return;
 
-    const existingItem = orderItems.find(item => item.productId === product.id);
+    const existingItem = orderItems.find(item => item.productId === String(product.id));
     if (existingItem) {
       setOrderItems(orderItems.map(item =>
-        item.productId === product.id
+        item.productId === String(product.id)
           ? { ...item, quantity: item.quantity + quantity }
           : item
       ));
     } else {
       setOrderItems([...orderItems, {
-        productId: product.id,
+        productId: String(product.id),
         name: product.name,
         price: product.price,
         quantity: quantity
@@ -60,11 +77,11 @@ export default function OrderCreation() {
     setQuantity(1);
   };
 
-  const removeProduct = (productId: number) => {
+  const removeProduct = (productId: string) => {
     setOrderItems(orderItems.filter(item => item.productId !== productId));
   };
 
-  const updateQuantity = (productId: number, newQuantity: number) => {
+  const updateQuantity = (productId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     setOrderItems(orderItems.map(item =>
       item.productId === productId
@@ -83,7 +100,7 @@ export default function OrderCreation() {
       await apiFetch('/orders', {
         method: 'POST',
         body: JSON.stringify({
-          customer_id: Number(selectedCustomer),
+          customer_id: selectedCustomer,
           items: orderItems.map((item) => ({
             product_id: item.productId,
             quantity: item.quantity,
@@ -96,6 +113,7 @@ export default function OrderCreation() {
       setSelectedCustomer('');
       setSelectedProduct('');
       setQuantity(1);
+      loadOptions();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to create order');
     }
@@ -156,7 +174,7 @@ export default function OrderCreation() {
                 <label className="block text-sm font-medium text-[#040303] mb-2">
                   Select Product
                 </label>
-                <select
+              <select
                   value={selectedProduct}
                   onChange={(e) => setSelectedProduct(e.target.value)}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
@@ -186,6 +204,7 @@ export default function OrderCreation() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={addProduct}
+                  disabled={!selectedProduct}
                   className="px-5 py-3 bg-[#040303] text-white rounded-xl hover:bg-gray-800 hover:shadow-lg transition-all duration-300 flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
@@ -306,7 +325,7 @@ export default function OrderCreation() {
               <motion.button
                 whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.95 }}
-                disabled={orderItems.length === 0 || !selectedCustomer}
+                disabled={orderItems.length === 0 || !selectedCustomer || loading}
                 onClick={createOrder}
                 className="w-full py-3 bg-[#040303] text-white rounded-xl hover:bg-gray-800 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
@@ -331,12 +350,20 @@ export default function OrderCreation() {
               <div className="space-y-1 text-sm text-gray-700">
                 <p>Items: {orderItems.length}</p>
                 <p>Total Units: {orderItems.reduce((sum, item) => sum + item.quantity, 0)}</p>
-                <p>Customer: {selectedCustomer ? customers.find(c => c.id === parseInt(selectedCustomer))?.name : 'Not selected'}</p>
+                <p>
+                  Customer:{' '}
+                  {selectedCustomer
+                    ? customers.find(c => String(c.id) === String(selectedCustomer))?.name
+                    : 'Not selected'}
+                </p>
               </div>
             </motion.div>
           </motion.div>
         </div>
       </div>
+      {errorMessage && (
+        <p className="text-sm text-red-600">{errorMessage}</p>
+      )}
     </div>
   );
 }

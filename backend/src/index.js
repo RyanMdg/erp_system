@@ -2,6 +2,9 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 
 const authRoutes = require("./routes/auth.routes");
@@ -13,8 +16,30 @@ const dashboardRoutes = require("./routes/dashboard.routes");
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+  : "*";
+
+app.use(
+  cors({
+    origin: corsOrigins === "*" ? "*" : corsOrigins,
+    credentials: true,
+  })
+);
+app.use(helmet());
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+app.use(morgan(process.env.LOG_FORMAT || "combined"));
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -34,4 +59,10 @@ const port = process.env.PORT || 3001;
 app.listen(port, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${port}`);
+});
+
+process.on("SIGTERM", () => {
+  // eslint-disable-next-line no-console
+  console.log("SIGTERM received, shutting down.");
+  process.exit(0);
 });

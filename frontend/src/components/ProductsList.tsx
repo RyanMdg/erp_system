@@ -21,6 +21,9 @@ export default function ProductsList() {
   const [formError, setFormError] = useState('');
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<{
     id: number | string;
     sku: string;
@@ -38,6 +41,15 @@ export default function ProductsList() {
     category: '',
     price: '',
     stock_quantity: '0',
+  });
+  const [editValues, setEditValues] = useState({
+    id: '',
+    name: '',
+    sku: '',
+    category: '',
+    price: '',
+    stock_quantity: '0',
+    status: 'in_stock',
   });
 
   const loadProducts = () => {
@@ -98,6 +110,69 @@ export default function ProductsList() {
       );
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const openEdit = (product: {
+    id: number | string;
+    name: string;
+    sku: string;
+    category: string | null;
+    price: number;
+    stock_quantity: number;
+    status: string | null;
+  }) => {
+    setFormError('');
+    setEditValues({
+      id: String(product.id),
+      name: product.name,
+      sku: product.sku,
+      category: product.category || '',
+      price: String(product.price),
+      stock_quantity: String(product.stock_quantity),
+      status: product.status || 'in_stock',
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditSubmitting(true);
+    setFormError('');
+    try {
+      await apiFetch(`/products/${editValues.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: editValues.name.trim(),
+          sku: editValues.sku.trim(),
+          category: editValues.category.trim() || null,
+          price: Number(editValues.price),
+          stock_quantity: Number(editValues.stock_quantity || 0),
+          status: editValues.status,
+        }),
+      });
+      setEditOpen(false);
+      loadProducts();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Failed to update product');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!editValues.id) return;
+    if (!window.confirm('Delete this product?')) return;
+    setDeleteSubmitting(true);
+    setFormError('');
+    try {
+      await apiFetch(`/products/${editValues.id}`, { method: 'DELETE' });
+      setEditOpen(false);
+      loadProducts();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Failed to delete product');
+    } finally {
+      setDeleteSubmitting(false);
     }
   };
 
@@ -239,6 +314,7 @@ export default function ProductsList() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         className="px-3 py-1.5 text-sm font-medium text-[#040303] hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                        onClick={() => openEdit(product)}
                       >
                         Edit
                       </motion.button>
@@ -469,6 +545,157 @@ export default function ProductsList() {
                 </div>
               </div>
             )}
+          </motion.div>
+        </div>
+      )}
+
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setEditOpen(false)}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-xl p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-[#040303]">Edit Product</h2>
+              <button
+                type="button"
+                onClick={() => setEditOpen(false)}
+                className="text-gray-500 hover:text-[#040303] transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {formError && (
+              <div className="mb-4 rounded-lg bg-red-50 text-red-600 px-3 py-2 text-sm">
+                {formError}
+              </div>
+            )}
+
+            <form className="space-y-4" onSubmit={handleUpdateProduct}>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Product Name
+                </label>
+                <input
+                  value={editValues.name}
+                  onChange={(e) =>
+                    setEditValues({ ...editValues, name: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                  placeholder="Product name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  SKU
+                </label>
+                <input
+                  value={editValues.sku}
+                  onChange={(e) =>
+                    setEditValues({ ...editValues, sku: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                  placeholder="PRD-001"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Category
+                </label>
+                <input
+                  value={editValues.category}
+                  onChange={(e) =>
+                    setEditValues({ ...editValues, category: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                  placeholder="Category"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#040303] mb-2">
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editValues.price}
+                    onChange={(e) =>
+                      setEditValues({ ...editValues, price: e.target.value })
+                    }
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#040303] mb-2">
+                    Stock
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editValues.stock_quantity}
+                    onChange={(e) =>
+                      setEditValues({ ...editValues, stock_quantity: e.target.value })
+                    }
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Status
+                </label>
+                <select
+                  value={editValues.status}
+                  onChange={(e) =>
+                    setEditValues({ ...editValues, status: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                >
+                  <option value="in_stock">In Stock</option>
+                  <option value="low_stock">Low Stock</option>
+                  <option value="out_of_stock">Out of Stock</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteProduct}
+                  disabled={deleteSubmitting}
+                  className="px-4 py-2 rounded-lg text-red-600 hover:text-red-700 transition-colors"
+                >
+                  {deleteSubmitting ? 'Deleting...' : 'Delete'}
+                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(false)}
+                    className="px-4 py-2 rounded-lg text-gray-600 hover:text-[#040303] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editSubmitting}
+                    className="px-5 py-2.5 bg-[#040303] text-white rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50"
+                  >
+                    {editSubmitting ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

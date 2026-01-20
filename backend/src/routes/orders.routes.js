@@ -5,6 +5,7 @@ const {
   listOrders,
   getOrder,
   updateOrderStatus,
+  updatePaymentStatus,
 } = require("../controllers/orders.controller");
 const { authenticate } = require("../middlewares/auth");
 const validate = require("../middlewares/validate");
@@ -53,6 +54,16 @@ router.patch(
     validate,
   ],
   updateOrderStatus
+);
+
+router.patch(
+  "/:id/payment",
+  [
+    oneOf([param("id").isUUID(), param("id").isInt()], "Invalid order id"),
+    body("payment_status").isIn(["paid", "unpaid"]),
+    validate,
+  ],
+  updatePaymentStatus
 );
 
 module.exports = router;

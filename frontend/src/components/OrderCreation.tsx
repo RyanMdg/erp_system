@@ -21,6 +21,18 @@ export default function OrderCreation() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [orders, setOrders] = useState<
+    Array<{
+      id: string;
+      customer_name: string;
+      total: number;
+      status: string;
+      payment_status?: string;
+      created_at: string;
+    }>
+  >([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState('');
 
   const loadOptions = () => {
     setLoading(true);
@@ -35,7 +47,13 @@ export default function OrderCreation() {
     ])
       .then(([customersResult, productsResult]) => {
         setCustomers(customersResult.items);
-        setAvailableProducts(productsResult.items);
+        setAvailableProducts(
+          productsResult.items.map((product) => ({
+            ...product,
+            price: Number(product.price),
+            stock_quantity: Number(product.stock_quantity),
+          }))
+        );
       })
       .catch((error) => {
         setErrorMessage(
@@ -49,7 +67,21 @@ export default function OrderCreation() {
 
   useEffect(() => {
     loadOptions();
+    loadOrders();
   }, []);
+
+  const loadOrders = () => {
+    setOrdersLoading(true);
+    setOrdersError('');
+    apiFetch<{ items: typeof orders }>(`/orders?page=1&pageSize=20`)
+      .then((data) => setOrders(data.items))
+      .catch((error) => {
+        setOrdersError(
+          error instanceof Error ? error.message : 'Failed to load orders'
+        );
+      })
+      .finally(() => setOrdersLoading(false));
+  };
 
   const addProduct = () => {
     if (!selectedProduct) return;
@@ -68,7 +100,7 @@ export default function OrderCreation() {
       setOrderItems([...orderItems, {
         productId: String(product.id),
         name: product.name,
-        price: product.price,
+        price: Number(product.price),
         quantity: quantity
       }]);
     }
@@ -114,8 +146,33 @@ export default function OrderCreation() {
       setSelectedProduct('');
       setQuantity(1);
       loadOptions();
+      loadOrders();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to create order');
+    }
+  };
+
+  const updateOrderStatus = async (id: string, status: string) => {
+    try {
+      await apiFetch(`/orders/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      loadOrders();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update status');
+    }
+  };
+
+  const updatePaymentStatus = async (id: string, payment_status: string) => {
+    try {
+      await apiFetch(`/orders/${id}/payment`, {
+        method: 'PATCH',
+        body: JSON.stringify({ payment_status }),
+      });
+      loadOrders();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update payment');
     }
   };
 
@@ -182,7 +239,7 @@ export default function OrderCreation() {
                   <option value="">Choose a product...</option>
                   {availableProducts.map(product => (
                     <option key={product.id} value={product.id}>
-                      {product.name} - ${product.price} (Stock: {product.stock_quantity})
+                      {product.name} - ${Number(product.price).toFixed(2)} (Stock: {product.stock_quantity})
                     </option>
                   ))}
                 </select>
@@ -272,6 +329,124 @@ export default function OrderCreation() {
                 </div>
               )}
             </AnimatePresence>
+          </motion.div>
+
+          {/* Recent Orders */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="bg-white rounded-2xl p-6 shadow-sm"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-[#040303]">Recent Orders</h2>
+              <button
+                type="button"
+                onClick={loadOrders}
+                className="text-sm text-gray-600 hover:text-[#040303]"
+              >
+                Refresh
+              </button>
+            </div>
+            {ordersError && (
+              <p className="text-sm text-red-600 mb-3">{ordersError}</p>
+            )}
+            {ordersLoading ? (
+              <p className="text-sm text-gray-500">Loading orders...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500">
+                      <th className="py-2">Order</th>
+                      <th className="py-2">Customer</th>
+                      <th className="py-2">Total</th>
+                      <th className="py-2">Status</th>
+                      <th className="py-2">Payment</th>
+                      <th className="py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {orders.map((order) => (
+                      <tr key={order.id}>
+                        <td className="py-2 font-medium text-[#040303]">
+                          ORD-{order.id}
+                        </td>
+                        <td className="py-2">{order.customer_name}</td>
+                        <td className="py-2">${Number(order.total).toFixed(2)}</td>
+                        <td className="py-2">
+                          <span
+                            className={`px-2 py-1 rounded-lg text-xs ${
+                              order.status === 'completed'
+                                ? 'bg-green-50 text-green-600'
+                                : order.status === 'processing'
+                                ? 'bg-blue-50 text-blue-600'
+                                : order.status === 'cancelled'
+                                ? 'bg-red-50 text-red-600'
+                                : 'bg-yellow-50 text-yellow-600'
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="py-2">
+                          <span
+                            className={`px-2 py-1 rounded-lg text-xs ${
+                              order.payment_status === 'paid'
+                                ? 'bg-green-50 text-green-600'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {order.payment_status || 'unpaid'}
+                          </span>
+                        </td>
+                        <td className="py-2 space-x-2">
+                          {order.status !== 'processing' && order.status !== 'completed' && (
+                            <button
+                              type="button"
+                              onClick={() => updateOrderStatus(order.id, 'processing')}
+                              className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600"
+                            >
+                              Processing
+                            </button>
+                          )}
+                          {order.status !== 'completed' && (
+                            <button
+                              type="button"
+                              onClick={() => updateOrderStatus(order.id, 'completed')}
+                              className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-600"
+                            >
+                              Complete
+                            </button>
+                          )}
+                          {order.status !== 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                              className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updatePaymentStatus(
+                                order.id,
+                                order.payment_status === 'paid' ? 'unpaid' : 'paid'
+                              )
+                            }
+                            className="text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700"
+                          >
+                            {order.payment_status === 'paid' ? 'Mark Unpaid' : 'Mark Paid'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </motion.div>
         </div>
 

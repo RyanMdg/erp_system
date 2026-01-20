@@ -42,11 +42,26 @@ const adjustInventory = asyncHandler(async (req, res) => {
     }
 
     const hasUserId = await hasColumn("inventory_movements", "user_id");
+    const hasCreatedBy = await hasColumn("inventory_movements", "created_by");
 
     if (hasUserId) {
       await client.query(
         `INSERT INTO inventory_movements
           (product_id, movement_type, quantity, location, reference, user_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          product_id,
+          movement_type,
+          quantity,
+          location || null,
+          reference || null,
+          req.user.id,
+        ]
+      );
+    } else if (hasCreatedBy) {
+      await client.query(
+        `INSERT INTO inventory_movements
+          (product_id, movement_type, quantity, location, reference, created_by)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           product_id,
@@ -119,15 +134,21 @@ const listMovements = asyncHandler(async (req, res) => {
 
   const columns = await getColumns("inventory_movements");
   const hasUserId = columns.has("user_id");
+  const hasCreatedBy = columns.has("created_by");
+  const userJoin = hasUserId
+    ? "LEFT JOIN users u ON u.id = im.user_id"
+    : hasCreatedBy
+    ? "LEFT JOIN users u ON u.id = im.created_by"
+    : "";
 
   params.push(pageSize, offset);
   const listResult = await query(
     `SELECT im.id, im.product_id, im.movement_type, im.quantity, im.location, im.reference,
             im.created_at, p.name AS product_name,
-            ${hasUserId ? "u.full_name" : "NULL"} AS user_name
+            ${hasUserId || hasCreatedBy ? "u.full_name" : "NULL"} AS user_name
      FROM inventory_movements im
      JOIN products p ON p.id = im.product_id
-     ${hasUserId ? "LEFT JOIN users u ON u.id = im.user_id" : ""}
+     ${userJoin}
      ${whereClause}
      ORDER BY im.created_at DESC
      LIMIT $${params.length - 1} OFFSET $${params.length}`,

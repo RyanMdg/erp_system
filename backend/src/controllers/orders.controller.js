@@ -111,6 +111,12 @@ const createOrder = asyncHandler(async (req, res) => {
       valuePlaceholders.push(`$${idx}`);
       idx += 1;
     }
+    if (orderColumns.has("created_by")) {
+      insertColumns.push("created_by");
+      insertValues.push(req.user.id);
+      valuePlaceholders.push(`$${idx}`);
+      idx += 1;
+    }
     if (orderColumns.has("subtotal")) {
       insertColumns.push("subtotal");
       insertValues.push(subtotal);
@@ -168,16 +174,32 @@ const createOrder = asyncHandler(async (req, res) => {
     const order = orderResult.rows[0];
 
     for (const item of preparedItems) {
+      const orderItemsColumns = await getColumns("order_items");
+      const totalColumn = orderItemsColumns.has("total_price")
+        ? "total_price"
+        : orderItemsColumns.has("line_total")
+        ? "line_total"
+        : null;
+
+      const itemColumns = ["order_id", "product_id", "quantity", "unit_price"];
+      const itemValues = [
+        order.id,
+        item.product_id,
+        item.quantity,
+        item.unit_price,
+      ];
+      const itemPlaceholders = ["$1", "$2", "$3", "$4"];
+
+      if (totalColumn) {
+        itemColumns.push(totalColumn);
+        itemValues.push(item.line_total);
+        itemPlaceholders.push("$5");
+      }
+
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          order.id,
-          item.product_id,
-          item.quantity,
-          item.unit_price,
-          item.line_total,
-        ]
+        `INSERT INTO order_items (${itemColumns.join(", ")})
+         VALUES (${itemPlaceholders.join(", ")})`,
+        itemValues
       );
 
       await client.query(
@@ -192,6 +214,13 @@ const createOrder = asyncHandler(async (req, res) => {
         await client.query(
           `INSERT INTO inventory_movements
             (product_id, movement_type, quantity, reference, user_id)
+           VALUES ($1, 'sale', $2, $3, $4)`,
+          [item.product_id, item.quantity, `order:${order.id}`, req.user.id]
+        );
+      } else if (movementColumns.has("created_by")) {
+        await client.query(
+          `INSERT INTO inventory_movements
+            (product_id, movement_type, quantity, reference, created_by)
            VALUES ($1, 'sale', $2, $3, $4)`,
           [item.product_id, item.quantity, `order:${order.id}`, req.user.id]
         );

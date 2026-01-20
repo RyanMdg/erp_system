@@ -7,7 +7,7 @@ export default function ProductsList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState<
     Array<{
-      id: number;
+      id: number | string;
       sku: string;
       name: string;
       category: string | null;
@@ -40,13 +40,66 @@ export default function ProductsList() {
     stock_quantity: '0',
   });
 
-  useEffect(() => {
+  const loadProducts = () => {
     apiFetch<{ items: typeof products }>(
       `/products?search=${encodeURIComponent(searchQuery)}&page=1&pageSize=100`
     )
       .then((data) => setProducts(data.items))
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadProducts();
   }, [searchQuery]);
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setFormError('');
+
+    try {
+      await apiFetch('/products', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: formValues.name.trim(),
+          sku: formValues.sku.trim(),
+          category: formValues.category.trim() || null,
+          price: Number(formValues.price),
+          stock_quantity: Number(formValues.stock_quantity || 0),
+        }),
+      });
+
+      setIsModalOpen(false);
+      setFormValues({
+        name: '',
+        sku: '',
+        category: '',
+        price: '',
+        stock_quantity: '0',
+      });
+      loadProducts();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Failed to add product');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleViewDetails = async (id: number | string) => {
+    setDetailsOpen(true);
+    setDetailsLoading(true);
+    setSelectedProduct(null);
+    try {
+      const data = await apiFetch<typeof selectedProduct>(`/products/${id}`);
+      setSelectedProduct(data);
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : 'Failed to load product'
+      );
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
 
   return (
     <div className="p-8 space-y-6">
@@ -64,6 +117,7 @@ export default function ProductsList() {
         <motion.button
           whileHover={{ scale: 1.05, y: -2 }}
           whileTap={{ scale: 0.95 }}
+          onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#040303] text-white rounded-xl hover:bg-gray-800 hover:shadow-lg transition-all duration-300"
         >
           <Plus className="w-5 h-5" />
@@ -192,6 +246,7 @@ export default function ProductsList() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                        onClick={() => handleViewDetails(product.id)}
                       >
                         View
                       </motion.button>
@@ -203,6 +258,220 @@ export default function ProductsList() {
           </table>
         </div>
       </motion.div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setIsModalOpen(false)}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-xl p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-[#040303]">Add Product</h2>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-500 hover:text-[#040303] transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {formError && (
+              <div className="mb-4 rounded-lg bg-red-50 text-red-600 px-3 py-2 text-sm">
+                {formError}
+              </div>
+            )}
+
+            <form className="space-y-4" onSubmit={handleCreateProduct}>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Product Name
+                </label>
+                <input
+                  value={formValues.name}
+                  onChange={(e) =>
+                    setFormValues({ ...formValues, name: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                  placeholder="Product name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  SKU
+                </label>
+                <input
+                  value={formValues.sku}
+                  onChange={(e) =>
+                    setFormValues({ ...formValues, sku: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                  placeholder="PRD-001"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#040303] mb-2">
+                  Category
+                </label>
+                <input
+                  value={formValues.category}
+                  onChange={(e) =>
+                    setFormValues({ ...formValues, category: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                  placeholder="Category"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#040303] mb-2">
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formValues.price}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, price: e.target.value })
+                    }
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#040303] mb-2">
+                    Stock
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formValues.stock_quantity}
+                    onChange={(e) =>
+                      setFormValues({
+                        ...formValues,
+                        stock_quantity: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040303] focus:border-transparent transition-all duration-300"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-gray-600 hover:text-[#040303] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2.5 bg-[#040303] text-white rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Product'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {detailsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDetailsOpen(false)}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-xl p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-[#040303]">
+                Product Details
+              </h2>
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(false)}
+                className="text-gray-500 hover:text-[#040303] transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {detailsLoading && (
+              <p className="text-sm text-gray-500">Loading product...</p>
+            )}
+
+            {!detailsLoading && selectedProduct && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs uppercase text-gray-400">Name</p>
+                  <p className="text-lg font-semibold text-[#040303]">
+                    {selectedProduct.name}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs uppercase text-gray-400">SKU</p>
+                    <p className="text-sm text-gray-700">
+                      {selectedProduct.sku}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-400">Category</p>
+                    <p className="text-sm text-gray-700">
+                      {selectedProduct.category || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-400">Price</p>
+                    <p className="text-sm text-gray-700">
+                      ${Number(selectedProduct.price).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-400">Stock</p>
+                    <p className="text-sm text-gray-700">
+                      {selectedProduct.stock_quantity}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-400">Status</p>
+                    <p className="text-sm text-gray-700">
+                      {selectedProduct.status === 'in_stock'
+                        ? 'In Stock'
+                        : selectedProduct.status === 'low_stock'
+                        ? 'Low Stock'
+                        : 'Out of Stock'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-400">Created</p>
+                    <p className="text-sm text-gray-700">
+                      {selectedProduct.created_at
+                        ? new Date(selectedProduct.created_at).toLocaleDateString()
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

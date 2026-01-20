@@ -2,7 +2,7 @@ const { pool, query } = require("../db");
 const { sendSuccess, sendError } = require("../utils/response");
 const { getPagination, buildPaginationMeta } = require("../utils/pagination");
 const asyncHandler = require("../utils/asyncHandler");
-const { getColumns } = require("../utils/schema");
+const { getColumns, getColumnInfo } = require("../utils/schema");
 
 const TAX_RATE = parseFloat(process.env.TAX_RATE || "0");
 
@@ -175,11 +175,19 @@ const createOrder = asyncHandler(async (req, res) => {
 
     for (const item of preparedItems) {
       const orderItemsColumns = await getColumns("order_items");
+      const orderItemsInfo = await getColumnInfo("order_items");
       const totalColumn = orderItemsColumns.has("total_price")
         ? "total_price"
         : orderItemsColumns.has("line_total")
         ? "line_total"
         : null;
+      const totalColumnInfo = totalColumn
+        ? orderItemsInfo.get(totalColumn)
+        : null;
+      const canSetTotalColumn =
+        totalColumnInfo &&
+        totalColumnInfo.is_generated === "NEVER" &&
+        !totalColumnInfo.generation_expression;
 
       const itemColumns = ["order_id", "product_id", "quantity", "unit_price"];
       const itemValues = [
@@ -190,7 +198,7 @@ const createOrder = asyncHandler(async (req, res) => {
       ];
       const itemPlaceholders = ["$1", "$2", "$3", "$4"];
 
-      if (totalColumn) {
+      if (totalColumn && canSetTotalColumn) {
         itemColumns.push(totalColumn);
         itemValues.push(item.line_total);
         itemPlaceholders.push("$5");
